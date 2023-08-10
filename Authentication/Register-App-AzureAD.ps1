@@ -15,7 +15,7 @@ Function CreateSSLCert([String]$subject, [String]$CertLocation, [String]$dnsname
 }
 
 Function ExpCert([String]$cert, [String]$FileName, $password, [String]$rootpath) {
-    Export-Certificate -Cert $cert -Type Cert -FilePath "$($rootpath)$($FileName).cer"
+    #Export-Certificate -Cert $cert -Type Cert -FilePath "$($rootpath)$($FileName).cer"
     $password = ConvertTo-SecureString -String $password -Force -AsPlainText
     Export-PfxCertificate -Password $password -Cert $cert -FilePath "$($rootpath)$($FileName).pfx"
     Write-Host "Certs have been exported to $($rootpath)" -ForegroundColor Green
@@ -82,6 +82,7 @@ if (!$moduleinstalled) {
 }
 
 #Initial check to see if already connected.
+$connected = $false
 try {
     Get-AzureADTenantDetail
     $connected = $true
@@ -144,20 +145,42 @@ $newapp = RegisterApp -displayName $appName -identifierUris (Get-AzureADDomain |
 Write-Host 'Creating Service Principal' -ForegroundColor Green
 CreateSP -appId $newapp.AppId -userAdminstratorRoleID (Get-AzureADDirectoryRole | Where-Object { $_.DisplayName -eq 'User Administrator' }).ObjectId
 #test and verify.
+$allApps = Get-AzureADApplication -All:$true
+$appsuccesfullycreated = if ($allApps.AppId -contains $newapp.AppId) {$true} else {$false}
+if ($appsuccesfullycreated) {
+    Write-Host 'App successfully registered.' -ForegroundColor Green
+} else {
+    Write-Host 'Could not register app.' -ForegroundColor Red
+    Exit
+}
+#Removes cert files generated during execution
+if ($appsuccesfullycreated) {
+    try {
+        Remove-Item $certExport.pfxFilepath -Force -Confirm:$false -ErrorAction Stop
+    } catch {
+        Write-Warning "COULD NOT DELETE FILE $($certExport.pfxFilepath) - This file contains sensitive Info and should be removed"
+    }
+}
 
-
-#temp write hosts 
 Write-Host "Thumbprint - $($localappcert.certThumbprint)" -ForegroundColor Green
 Write-Host "AppID - $($newapp.AppId)" -ForegroundColor Green
 Write-Host "Tenant ID $($tenantDetails.ObjectId)" -ForegroundColor Green
-#set env variables to use in other scripts.
+Write-Host 'Please wait while I set up the env variables you will need to connect later'
 
-
-# env variables to add:
-# thumbprint
-# AppID
-# TenantID
-
-#use a foreach to add each variable so I can just add to list when needed.
-
+#sets the fields above as environment variables in user scope to be referenced in other scripts.
+$newEnvVariables = @{
+    AppId = $($newapp.AppId)
+    AADCertThumbprint = $($localappcert.certThumbprint)
+    TenantID = $($tenantDetails.ObjectId)
+}
+foreach ($envVar in $newEnvVariables.GetEnumerator()) {
+    $envVar.Name = "$($appName)$($envVar.Name)"
+    Write-Host "Setting Env Variable $($envVar.Name) - $($envVar.Value)"
+    [Environment]::setEnvironmentVariable($($envVar.Name),$($envVar.Value),'User')
+}
+#finally, disconnect Azure Ad so no further commands can be run.
 Disconnect-AzureAD 
+
+#Later scripts can now connect using a certificate for automation with the following:
+# Connect-AzureAD -TenantId $env:AutoMikeTenantID -ApplicationId $env:AutoMikeAppId -CertificateThumbprint $env:AutoMikeAADCertThumbprint
+
