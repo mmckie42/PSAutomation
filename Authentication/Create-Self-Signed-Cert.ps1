@@ -35,7 +35,6 @@ Function CreateFolderIfNotExist($path) {
 }
 #Pre-Reqs
 #Env Variable created called certPW
-
 #Check if env variable is populated
 If (![Environment]::getEnvironmentVariable('certPW')) {
     Write-Host "You have not created your certPW env variable, please do so before running this script, do this by running [Environment]::setEnvironmentVariable('certPW','<password>','Machine') as admin"
@@ -47,7 +46,7 @@ try {
 } catch {
     Write-Host "Could not create folder $path"
 }
-$appcert = CreateSSCert -subject 'test' -CertLocation $defaultCertStore
+$appcert = CreateSSCert -subject "$($appName)-app" -CertLocation $defaultCertStore
 ExpCert -cert $appcert.CertFullName -FileName 'testcert' -password "$($env:certPW)" -rootpath $defaultRootPath
 $certThumbprint = $appcert.certThumbprint
 
