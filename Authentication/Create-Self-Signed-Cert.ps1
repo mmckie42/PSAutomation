@@ -47,7 +47,7 @@ try {
     Write-Host "Could not create folder $path"
 }
 $appcert = CreateSSCert -subject "$($appName)-app" -CertLocation $defaultCertStore
-ExpCert -cert $appcert.CertFullName -FileName 'testcert' -password "$($env:certPW)" -rootpath $defaultRootPath
+ExpCert -cert $appcert.CertFullName -FileName "$($appName)-app-cert" -password "$($env:certPW)" -rootpath $defaultRootPath
 $certThumbprint = $appcert.certThumbprint
 
 
