@@ -65,10 +65,11 @@ If (![Environment]::getEnvironmentVariable('certPW')) {
     Write-Host "You have not created your certPW env variable, please do so before running this script, do this by running [Environment]::setEnvironmentVariable('certPW','<password>','Machine') as admin"
     exit
 }
-#checks if AzureAD Module is installed and loaded. - TEST
+#checks if AzureAD Module is installed and loaded.
+Import-Module -Name AzureAd -ErrorAction SilentlyContinue
 $moduleinstalled = Get-Module -Name AzureAD
 if (!$moduleinstalled) {
-    Write-Host 'AzureAD Module is not installed, installing now.'
+    Write-Host 'AzureAD Module is not installed, installing now.' -ForegroundColor Red
     try {
         Install-Module -Name AzureAD -Force -AllowClobber -Scope CurrentUser
         Import-Module AzureAD
@@ -142,7 +143,8 @@ $newapp = RegisterApp -displayName $appName -identifierUris (Get-AzureADDomain |
 #Create SP
 Write-Host 'Creating Service Principal' -ForegroundColor Green
 CreateSP -appId $newapp.AppId -userAdminstratorRoleID (Get-AzureADDirectoryRole | Where-Object { $_.DisplayName -eq 'User Administrator' }).ObjectId
-#test and verify.
+#5 second wait to allow it all to sync before verifying.
+Start-Sleep -Seconds 5
 $allApps = Get-AzureADApplication -All:$true
 $appsuccesfullycreated = if ($allApps.AppId -contains $newapp.AppId) {$true} else {$false}
 if ($appsuccesfullycreated) {
@@ -163,7 +165,7 @@ if ($appsuccesfullycreated) {
 Write-Host "Thumbprint - $($localappcert.certThumbprint)" -ForegroundColor Green
 Write-Host "AppID - $($newapp.AppId)" -ForegroundColor Green
 Write-Host "Tenant ID $($tenantDetails.ObjectId)" -ForegroundColor Green
-Write-Host 'Please wait while I set up the env variables you will need to connect later' -ForegroundColor Green
+Write-Host 'Please wait while I set up the env variables you will need these to connect programatically later' -ForegroundColor Green
 
 #sets the fields above as environment variables in user scope to be referenced in other scripts.
 $newEnvVariables = @{
@@ -173,7 +175,7 @@ $newEnvVariables = @{
 }
 foreach ($envVar in $newEnvVariables.GetEnumerator()) {
     $envVar.Name = "$($appName)$($envVar.Name)"
-    Write-Host "    - Setting Env Variable $($envVar.Name) - $($envVar.Value)"
+    Write-Host "`t- Setting Env Variable $($envVar.Name) - $($envVar.Value)"
     [Environment]::setEnvironmentVariable($($envVar.Name),$($envVar.Value),'User')
 }
 #finally, disconnect Azure Ad so no further commands can be run.
