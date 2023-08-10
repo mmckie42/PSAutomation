@@ -14,8 +14,7 @@ Function CreateSSLCert([String]$subject, [String]$CertLocation, [String]$dnsname
     }
 }
 
-Function ExpCert([String]$cert, [String]$FileName, $password, [String]$rootpath) {
-    #Export-Certificate -Cert $cert -Type Cert -FilePath "$($rootpath)$($FileName).cer"
+Function ExportCert([String]$cert, [String]$FileName, $password, [String]$rootpath) {
     $password = ConvertTo-SecureString -String $password -Force -AsPlainText
     Export-PfxCertificate -Password $password -Cert $cert -FilePath "$($rootpath)$($FileName).pfx"
     Write-Host "Certs have been exported to $($rootpath)" -ForegroundColor Green
@@ -37,7 +36,7 @@ Function RegisterApp([String]$displayName, [String]$identifierUris, [String]$Cus
         -Type AsymmetricX509Cert `
         -Usage Verify `
         -Value $keyValue
-        #Don't know why I need this at this stage. -CustomKeyIdentifier $CustomKeyIdentifier `
+        #Add this back in when I can be bothered, it will help me verify its existence later on. -CustomKeyIdentifier $CustomKeyIdentifier `
 
     return @{
         AppId = $app.AppId
@@ -59,9 +58,8 @@ Function CreateFolderIfNotExist($path) {
     } 
 }
 
-#actual running of script here
-#Env Variable created called certPW
 
+#Pre Req - Env Variable created called certPW
 #Check if env variable is populated
 If (![Environment]::getEnvironmentVariable('certPW')) {
     Write-Host "You have not created your certPW env variable, please do so before running this script, do this by running [Environment]::setEnvironmentVariable('certPW','<password>','Machine') as admin"
@@ -137,7 +135,7 @@ Write-Host 'Creating Cert'  -ForegroundColor Green
 $localAppCert = CreateSSLCert -subject "$($appName)-app" -CertLocation $defaultCertStore -dnsname "$($appName).com.au"
 #Export cert
 Write-Host 'Exporting Cert'  -ForegroundColor Green
-$certExport = ExpCert -cert $localAppCert.CertFullName -FileName "$($appName)-app-cert" -password "$($env:certPW)" -rootpath $defaultRootPath
+$certExport = ExportCert -cert $localAppCert.CertFullName -FileName "$($appName)-app-cert" -password "$($env:certPW)" -rootpath $defaultRootPath
 #register app and load cert
 Write-Host 'Registering App and uploading cert'  -ForegroundColor Green
 $newapp = RegisterApp -displayName $appName -identifierUris (Get-AzureADDomain | Where-Object {$_.Name -like "*.onmicrosoft.com"}).Name -pfxPath $certExport.pfxFilepath -certPW "$($env:certPW)"
@@ -165,7 +163,7 @@ if ($appsuccesfullycreated) {
 Write-Host "Thumbprint - $($localappcert.certThumbprint)" -ForegroundColor Green
 Write-Host "AppID - $($newapp.AppId)" -ForegroundColor Green
 Write-Host "Tenant ID $($tenantDetails.ObjectId)" -ForegroundColor Green
-Write-Host 'Please wait while I set up the env variables you will need to connect later'
+Write-Host 'Please wait while I set up the env variables you will need to connect later' -ForegroundColor Green
 
 #sets the fields above as environment variables in user scope to be referenced in other scripts.
 $newEnvVariables = @{
@@ -175,7 +173,7 @@ $newEnvVariables = @{
 }
 foreach ($envVar in $newEnvVariables.GetEnumerator()) {
     $envVar.Name = "$($appName)$($envVar.Name)"
-    Write-Host "Setting Env Variable $($envVar.Name) - $($envVar.Value)"
+    Write-Host "    - Setting Env Variable $($envVar.Name) - $($envVar.Value)"
     [Environment]::setEnvironmentVariable($($envVar.Name),$($envVar.Value),'User')
 }
 #finally, disconnect Azure Ad so no further commands can be run.
