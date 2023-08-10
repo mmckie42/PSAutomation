@@ -4,7 +4,7 @@ $defaultRootPath = 'c:\temp\Certs\'
 $appName = 'AutoMike'
 
 
-Function CreateSSCert([String]$subject, [String]$CertLocation) {
+Function CreateSSLCert([String]$subject, [String]$CertLocation) {
     #currently uses default validity of 1 year, can change if required.
     $NewCert = New-SelfSignedCertificate -Subject $subject -CertStoreLocation $CertLocation
     Return @{
