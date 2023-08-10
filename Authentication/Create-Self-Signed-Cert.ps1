@@ -2,9 +2,10 @@
 $defaultCertStore = 'Cert:\CurrentUser\My'
 $defaultRootPath = 'c:\temp\Certs\'
 $appName = 'AutoMike'
-$certThumbprint = ''
+
 
 Function CreateSSCert([String]$subject, [String]$CertLocation) {
+    #currently uses default validity of 1 year, can change if required.
     $NewCert = New-SelfSignedCertificate -Subject $subject -CertStoreLocation $CertLocation
     Return @{
         Subject = $NewCert.Subject
@@ -37,7 +38,7 @@ Function CreateFolderIfNotExist($path) {
 
 #Check if env variable is populated
 If (![Environment]::getEnvironmentVariable('certPW')) {
-    Write-Host "You have not created your certPW env variable, please do so before running this script, do this by running [Environment]::getEnvironmentVariable('certPW','<password>','Machine') as admin"
+    Write-Host "You have not created your certPW env variable, please do so before running this script, do this by running [Environment]::setEnvironmentVariable('certPW','<password>','Machine') as admin"
     exit
 }
 Write-Host "Using $([Environment]::getEnvironmentVariable('certPW')) as cert password." 
@@ -46,7 +47,11 @@ try {
 } catch {
     Write-Host "Could not create folder $path"
 }
-ExpCert -cert $(CreateSSCert -subject 'test' -CertLocation $defaultCertStore).CertFullName -FileName 'testcert' -password "$($env:certPW)" -rootpath $defaultRootPath
+$appcert = CreateSSCert -subject 'test' -CertLocation $defaultCertStore
+ExpCert -cert $appcert.CertFullName -FileName 'testcert' -password "$($env:certPW)" -rootpath $defaultRootPath
+$certThumbprint = $appcert.certThumbprint
+
+
 
 #add code to import the cert pfx file, delete it after its confirmed that its added and store the thumbprint in an env variable
-
+#Will need to elevate to admin to store the env variables
