@@ -35,6 +35,7 @@ Function CreateFolderIfNotExist($path) {
 }
 #Pre-Reqs
 #Env Variable created called certPW
+#For now app created in Azure manually
 #Check if env variable is populated
 If (![Environment]::getEnvironmentVariable('certPW')) {
     Write-Host "You have not created your certPW env variable, please do so before running this script, do this by running [Environment]::setEnvironmentVariable('certPW','<password>','Machine') as admin"
