@@ -23,8 +23,8 @@ Function ExportCert([String]$cert, [String]$FileName, $password, [String]$rootpa
     }
 }
 
-Function RegisterApp([String]$displayName, [String]$identifierUris, [String]$CustomKeyIdentifier, [String]$pfxPath, $certPW) {
-    $app = New-AzureADApplication -DisplayName $displayName -IdentifierUris $identifierUris
+Function RegisterApp([String]$displayName, [String]$identifierUris, [String]$CustomKeyIdentifier, [String]$pfxPath, $certPW, [String]$replyURLs) {
+    $app = New-AzureADApplication -DisplayName $displayName -IdentifierUris $identifierUris -ReplyUrls $replyURLs
     $pw = ConvertTo-SecureString -String $certPW -Force -AsPlainText
     $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate("$($pfxPath)", $pw)
     $keyValue = [System.Convert]::ToBase64String($cert.GetRawCertData())
@@ -35,7 +35,7 @@ Function RegisterApp([String]$displayName, [String]$identifierUris, [String]$Cus
         -EndDate $((Get-Date).AddYears(1).AddDays(-1)) `
         -Type AsymmetricX509Cert `
         -Usage Verify `
-        -Value $keyValue
+        -Value $keyValue 
         #Add this back in when I can be bothered, it will help me verify its existence later on. -CustomKeyIdentifier $CustomKeyIdentifier `
 
     return @{
@@ -139,7 +139,7 @@ Write-Host 'Exporting Cert'  -ForegroundColor Green
 $certExport = ExportCert -cert $localAppCert.CertFullName -FileName "$($appName)-app-cert" -password "$($env:certPW)" -rootpath $defaultRootPath
 #register app and load cert
 Write-Host 'Registering App and uploading cert'  -ForegroundColor Green
-$newapp = RegisterApp -displayName $appName -identifierUris (Get-AzureADDomain | Where-Object {$_.Name -like "*.onmicrosoft.com"}).Name -pfxPath $certExport.pfxFilepath -certPW "$($env:certPW)"
+$newapp = RegisterApp -displayName $appName -identifierUris (Get-AzureADDomain | Where-Object {$_.Name -like "*.onmicrosoft.com"}).Name -pfxPath $certExport.pfxFilepath -certPW "$($env:certPW)" -replyURLs "https://login.microsoftonline.com/organizations/oauth2/nativeclient,https://localhost:8000" #? Added this to grant it access to log into EXO after setting API permissions.
 #Create SP
 Write-Host 'Creating Service Principal' -ForegroundColor Green
 CreateSP -appId $newapp.AppId -userAdminstratorRoleID (Get-AzureADDirectoryRole | Where-Object { $_.DisplayName -eq 'User Administrator' }).ObjectId
