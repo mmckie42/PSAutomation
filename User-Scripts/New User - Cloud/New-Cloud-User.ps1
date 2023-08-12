@@ -73,6 +73,10 @@ function GenerateRandomPassword($length) {
     return -join $result
 }
 
+function CheckFieldIsUnique($field, $newUserField) {
+    $allUsers.$field -notcontains $newUserField 
+}
+
 #TODO MAKE FUNCTION TO VALIDATE PASSWORD MEETS TENANTS REQUIREMENTS, pass either the entered one from input or the randomly generated one before applying to user object.
 
 
@@ -93,7 +97,7 @@ $newUsers = foreach ($user in $newUsers) {
     #Checks required fields are populated, if empty script will generate for you.
     if ([String]::IsNullOrEmpty($user.MailNickname)) {
         $user.MailNickname = (GenerateUniqueMailNickname -user $user -allUsers $allUsers).MailNickname
-    }
+    } 
 
     if (![String]::IsNullOrEmpty($user.AccountEnabled)) {
         #If not specified or can't parse input assume true.
@@ -113,6 +117,10 @@ $newUsers = foreach ($user in $newUsers) {
         $PasswordProfile.Password = GenerateRandomPassword -length $RandomPasswordLength
     }
     $user.Password = $PasswordProfile
+
+    if ([String]::IsNullOrEmpty($user.DisplayName)) {
+        $user.DisplayName = "$($user.FirstName) $($user.LastName)"
+    }
 }
 
 
@@ -162,6 +170,10 @@ upn
 accountenabled
 Department
 password - $PasswordProfile.Password / $user.password.passwordprofile.password ? Maybe - speculating until tested.
+
+When outputting to logs, add everything to an arraylist first, then output the lot rather than writing to disk each time, this will quicker.
+
+
 #>
 
 
