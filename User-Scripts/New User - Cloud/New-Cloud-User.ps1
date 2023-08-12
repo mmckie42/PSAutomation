@@ -4,7 +4,6 @@
 $csvPath = 'C:\temp\templatefornewuser-v1.csv'
 
 
-#functions #TODO remove this comment
 Function TrimImportData($newUser) {
     $fields = ($user | Get-Member -MemberType NoteProperty).Name 
     foreach ($field in $fields) {
@@ -59,11 +58,13 @@ function ConnectAzureAD($tenantID, $appID, $certThumbprint) {
         connectedToAzureAD = $connectedToAzureAD
     }
 }
+   
+
 
 #! MAIN ACTIVITIY
 $azureADConnection = ConnectAzureAD -tenantID $env:AutoMikeTenantID -appID $env:AutoMikeAppId -certThumbprint $env:AutoMikeAADCertThumbprint
 $allUsers = Get-AzureADUser -All:$true
-
+$DefaultDomain = ($DefaultDomain = Get-AzureADDomain | Where-Object {$_.IsDefault -eq $true}).Name
 
 #data inputs 
 #TODO Create ability to take data from json object as well as CSV. - start with csv though
@@ -72,14 +73,22 @@ $newUsers = $newUsers | Where-Object {![String]::IsNullOrEmpty($_)}
 
 
 #Prepare data 
-#Trims any leading or trailing blank spaces in inputs.
 $newUsers = foreach ($user in $newUsers) {
     TrimImportData -newUser $user
-    #Checks required fields are populated, if empty script will generate one for you.
+    #Checks required fields are populated, if empty script will generate for you.
     if ([String]::IsNullOrEmpty($user.MailNickname)) {
         $user.MailNickname = (GenerateUniqueMailNickname -user $user -allUsers $allUsers).MailNickname
     }
-    
+    if (![String]::IsNullOrEmpty($user.AccountEnabled)) {
+        #If not specified or can't parse input assume true.
+        try {
+            $user.AccountEnabled = [System.Convert]::ToBoolean($user.AccountEnabled)
+        } catch {
+            $user.AccountEnabled = $true 
+        }
+    } else {
+        $user.AccountEnabled = $true
+    }
 }
 
 
@@ -87,6 +96,7 @@ $newUsers = foreach ($user in $newUsers) {
 
 
 #! TESTING
+$user
 Write-Host $user
 
 
@@ -95,7 +105,7 @@ Write-Host $user
 
 #TODO required fields as array, loop through each and make sure its populated, if not generate 
 
-#add UPN if empty but verify it is unique, if not unique, try use middle initial if not empty, if it is then use more letters of first name until unique.
+#add UPN if empty but verify it is unique, if not unique, try use middle initial if not empty, if it is then use more letters of first name until unique or manually enter.
 
 #groups
 #TODO get groups with membership above a certain threshold and suggest users get added to these if not already in provided groups list. Have threshold easy to adjust
@@ -118,7 +128,16 @@ Write-Host $user
 
 
 #TODO final output must log final details, get by checking the actual object where possible, where not use the submitted data (e.g. for password)
-
+<# 
+Things to output:
+Firstname
+Lastname
+middlename
+mailnickname
+upn
+accountenabled
+Department
+#>
 
 
 
