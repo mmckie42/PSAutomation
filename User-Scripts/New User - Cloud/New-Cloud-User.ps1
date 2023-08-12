@@ -8,8 +8,8 @@ Function TrimImportData($newUser) {
     $fields = ($user | Get-Member -MemberType NoteProperty).Name 
     foreach ($field in $fields) {
         $user.$field = $($user.$field).trim()
-    Return $user
     }
+    Return $user
 }
 
 #TODO Update this function so it generates using middle name if not unique the first time before falling back to manually entering.
@@ -84,6 +84,9 @@ function CheckFieldIsUnique($field, $newUserField) {
 $azureADConnection = ConnectAzureAD -tenantID $env:AutoMikeTenantID -appID $env:AutoMikeAppId -certThumbprint $env:AutoMikeAADCertThumbprint
 $allUsers = Get-AzureADUser -All:$true
 $DefaultDomain = ($DefaultDomain = Get-AzureADDomain | Where-Object {$_.IsDefault -eq $true}).Name
+$creationLog = [System.Collections.ArrayList]@()
+$errorLog = [System.Collections.ArrayList]@()
+$invalidUsers = [System.Collections.ArrayList]@()
 
 #data inputs 
 #TODO Create ability to take data from json object as well as CSV. - start with csv though
@@ -121,6 +124,10 @@ $newUsers = foreach ($user in $newUsers) {
     if ([String]::IsNullOrEmpty($user.DisplayName)) {
         $user.DisplayName = "$($user.FirstName) $($user.LastName)"
     }
+    if (!(CheckFieldIsUnique -field "DisplayName" -newUserField $user.DisplayName)) {
+        $errorLog += "User with display name $($user.displayName) already exists."
+        $invalidUsers += $user
+    }
 }
 
 
@@ -151,7 +158,7 @@ Write-Host $user
 
 #Verification of data - may get combined with above.
 
-
+#TODO only create user if validation steps are successful. ($create validated users, remove invalid users before proceeding.)
 
 
 #final user advise of what will be created, prompt for confirmation after review
