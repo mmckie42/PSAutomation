@@ -2,7 +2,7 @@
 
 #variables 
 $csvPath = 'C:\temp\templatefornewuser-v1.csv'
-
+$RandomPasswordLength = 10
 
 Function TrimImportData($newUser) {
     $fields = ($user | Get-Member -MemberType NoteProperty).Name 
@@ -58,7 +58,22 @@ function ConnectAzureAD($tenantID, $appID, $certThumbprint) {
         connectedToAzureAD = $connectedToAzureAD
     }
 }
-   
+function GenerateRandomPassword($length) {
+
+    $charSet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.ToCharArray()
+    $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+    $bytes = New-Object byte[]($length)
+    $rng.GetBytes($bytes)
+    $result = New-Object char[]($length)
+  
+    for ($i = 0 ; $i -lt $length ; $i++) {
+        $result[$i] = $charSet[$bytes[$i]%$charSet.Length]
+    }
+ 
+    return -join $result
+}
+
+#TODO MAKE FUNCTION TO VALIDATE PASSWORD MEETS TENANTS REQUIREMENTS, pass either the entered one from input or the randomly generated one before applying to user object.
 
 
 #! MAIN ACTIVITIY
@@ -79,6 +94,7 @@ $newUsers = foreach ($user in $newUsers) {
     if ([String]::IsNullOrEmpty($user.MailNickname)) {
         $user.MailNickname = (GenerateUniqueMailNickname -user $user -allUsers $allUsers).MailNickname
     }
+
     if (![String]::IsNullOrEmpty($user.AccountEnabled)) {
         #If not specified or can't parse input assume true.
         try {
@@ -89,6 +105,14 @@ $newUsers = foreach ($user in $newUsers) {
     } else {
         $user.AccountEnabled = $true
     }
+
+    $PasswordProfile = New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile
+    if (![String]::IsNullOrEmpty($user.Password)) {
+        $PasswordProfile.Password = $($user.Password)
+    } else {
+        $PasswordProfile.Password = GenerateRandomPassword -length $RandomPasswordLength
+    }
+    $user.Password = $PasswordProfile
 }
 
 
@@ -137,6 +161,7 @@ mailnickname
 upn
 accountenabled
 Department
+password - $PasswordProfile.Password / $user.password.passwordprofile.password ? Maybe - speculating until tested.
 #>
 
 
