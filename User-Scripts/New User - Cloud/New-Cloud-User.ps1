@@ -78,11 +78,12 @@ $newUsers = foreach ($user in $newUsers) {
     #Checks required fields are populated, if empty script will generate one for you.
     if ([String]::IsNullOrEmpty($user.MailNickname)) {
         $user.MailNickname = (GenerateUniqueMailNickname -user $user -allUsers $allUsers).MailNickname
-        #! TESTING
-        Write-Host $user
     }
+    
 }
-$requiredFields = @('AccountEnabled', 'PasswordProfile', 'MailNickname', 'DisplayName') #! Dont think I need this, just run a check on each field and submit it to a function if its needed.
+
+
+#!  $requiredFields = @('AccountEnabled', 'PasswordProfile', 'MailNickname', 'DisplayName') - Just do a check for each of these.
 
 
 #! TESTING
