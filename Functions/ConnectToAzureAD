@@ -1,0 +1,22 @@
+function ConnectAzureAD($tenantID, $appID, $certThumbprint) {
+    $connectedToAzureAD = $false
+    if (($null -eq $connectedToAzureAD) -or ($connectedToAzureAD -eq $false)) {
+        try {
+            Get-AzureADTenantDetail
+            $connectedToAzureAD = $true
+        } catch [Microsoft.Open.Azure.AD.CommonLibrary.AadNeedAuthenticationException] {
+            Write-Host 'Connecting to AzureAD' -ForegroundColor Green
+            try {
+                Connect-AzureAD -TenantId $tenantID -ApplicationId $appID -CertificateThumbprint $certThumbprint
+                $connectedToAzureAD = $true
+            } catch {
+                $connectedToAzureAD = $false
+                Write-Warning "Could not connect to AzureAD. Exiting"
+                Exit
+            }   
+        }
+    }
+    Return @{
+        connectedToAzureAD = $connectedToAzureAD
+    }
+}
