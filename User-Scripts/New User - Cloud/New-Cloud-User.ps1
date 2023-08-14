@@ -13,9 +13,10 @@ Function TrimImportData($newUser) {
 }
 
 #TODO Update this function so it generates using middle name if not unique the first time before falling back to manually entering.
+#TODO don't manually enter, its messy when running in bulk, just try two fallbacks then add to error
 function GenerateUniqueMailNickname($user, $allUsers) {
     #Makes MailNickname in format of j.smith
-    $suggestedMailnickname = "$($user.FirstName.ToCharArray()[0]).$($user.lastName)"
+    $suggestedMailnickname = "$($user.GivenName.ToCharArray()[0]).$($user.Surname)"
     if ($allUsers.MailNickname -notcontains $suggestedMailnickname) {
         Return @{
             MailNickname = $suggestedMailnickname
@@ -77,31 +78,53 @@ function CheckFieldIsUnique($field, $newUserField) {
     $allUsers.$field -notcontains $newUserField 
 }
 
+Function ValidateUpnDomain($upn, $allDomains) {
+    $upnDomain = "$(($upn.split('@'))[1])"
+    $domainIsValid = $allDomains.Name -contains $upnDomain 
+    $domainIsValid
+}
+
+Function CreateNewAzureUser($user) { 
+    $props = ($user | Get-Member | Where MemberType -eq NoteProperty).Name | Where {$_ -ne 'Password'} 
+    $params = @{}
+    $params['PasswordProfile'] = $user.Password 
+    foreach ($prop in $props) {
+        if (![String]::IsNullOrEmpty($user.$prop)) {
+            $params[$prop] = $user.$prop
+            }
+        }  
+    try { 
+        New-AzureADUser @params -ErrorAction Stop
+        $creationLog += "$($User.displayName) Successfully created."
+    } Catch {
+        $errorLog += "User $($User.displayName) could not be created: $($_.Exception)"
+    }
+}
+
 #TODO MAKE FUNCTION TO VALIDATE PASSWORD MEETS TENANTS REQUIREMENTS, pass either the entered one from input or the randomly generated one before applying to user object.
 
 
 #! MAIN ACTIVITIY
+#TODO Create ability to take data from json object as well as CSV. - start with csv though
+$newUsers = Import-Csv -Path $csvPath
+$newUsers = $newUsers | Where-Object {![String]::IsNullOrEmpty($_)}
 $azureADConnection = ConnectAzureAD -tenantID $env:AutoMikeTenantID -appID $env:AutoMikeAppId -certThumbprint $env:AutoMikeAADCertThumbprint
 $allUsers = Get-AzureADUser -All:$true
-$DefaultDomain = ($DefaultDomain = Get-AzureADDomain | Where-Object {$_.IsDefault -eq $true}).Name
+$allDomains =  Get-AzureADDomain
+$DefaultDomain = ($DefaultDomain = $allDomains | Where-Object {$_.IsDefault -eq $true}).Name
 $creationLog = [System.Collections.ArrayList]@()
 $errorLog = [System.Collections.ArrayList]@()
 $invalidUsers = [System.Collections.ArrayList]@()
 
-#data inputs 
-#TODO Create ability to take data from json object as well as CSV. - start with csv though
-$newUsers = Import-Csv -Path $csvPath
-$newUsers = $newUsers | Where-Object {![String]::IsNullOrEmpty($_)}
-
-
 #Prepare data 
 $newUsers = foreach ($user in $newUsers) {
     TrimImportData -newUser $user
-    #Checks required fields are populated, if empty script will generate for you.
+    #Checks required fields are populated in CSV file, if empty script will generate for you.
+    #MailNickname
     if ([String]::IsNullOrEmpty($user.MailNickname)) {
         $user.MailNickname = (GenerateUniqueMailNickname -user $user -allUsers $allUsers).MailNickname
     } 
-
+    #AccountEnabled
     if (![String]::IsNullOrEmpty($user.AccountEnabled)) {
         #If not specified or can't parse input assume true.
         try {
@@ -112,7 +135,7 @@ $newUsers = foreach ($user in $newUsers) {
     } else {
         $user.AccountEnabled = $true
     }
-
+    #Password Profile
     $PasswordProfile = New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile
     if (![String]::IsNullOrEmpty($user.Password)) {
         $PasswordProfile.Password = $($user.Password)
@@ -120,27 +143,42 @@ $newUsers = foreach ($user in $newUsers) {
         $PasswordProfile.Password = GenerateRandomPassword -length $RandomPasswordLength
     }
     $user.Password = $PasswordProfile
-
+    #DisplayName
     if ([String]::IsNullOrEmpty($user.DisplayName)) {
-        $user.DisplayName = "$($user.FirstName) $($user.LastName)"
+        $user.DisplayName = "$($user.GivenName) $($user.Surname)"
     }
     if (!(CheckFieldIsUnique -field "DisplayName" -newUserField $user.DisplayName)) {
         $errorLog += "User with display name $($user.displayName) already exists."
         $invalidUsers += $user
     }
+    #UPN
+    #Suggest a upn in the format of j.smith@primarydomain if not entered in inputs.
+    if ([String]::IsNullOrEmpty($user.UserPrincipalName)) {
+        $user.UserPrincipalName = "$($user.GivenName.ToCharArray()[0]).$($user.Surname)@$($DefaultDomain)"
+    }
+    if (!(ValidateUpnDomain -upn $user.UserPrincipalName -allDomains $allDomains)) {
+        $errorLog += "The UPN $($user.UserPrincipalName) supplied for $($user.GivenName) $($user.Surname) is not a valid UPN for this tenant"
+        $invalidUsers += $user
+    } elseif (!(CheckFieldIsUnique -field "UserPrincipalName" -newUserField $user.UserPrincipalName)) {
+        $errorLog += "User with UserPrincipalName $($user.UserPrincipalName) already exists."
+        $invalidUsers += $user
+    }
+}
+$invalidUsers = $invalidUsers | Select-Object -Unique
+$newUsers = $newUsers | Where-Object {$invalidUsers.UserPrincipalName -notcontains $_.UserPrincipalName} | Select-Object -Unique
+
+foreach ($user in $newUsers) {
+    CreateNewAzureUser -user $user
 }
 
-
-#!  $requiredFields = @('AccountEnabled', 'PasswordProfile', 'MailNickname', 'DisplayName') - Just do a check for each of these.
-
-
-#! TESTING
-$user
-Write-Host $user
+#!  $requiredFields = @('AccountEnabled', 'PasswordProfile', 'MailNickname', 'DisplayName', 'UPN') - Just do a check for each of these.
 
 
 
-#foreach required field ensure its populated, if not populated, auto generate. Will need a function for each
+#! NEXT - Creating output object CSV
+
+
+#TODO #foreach required field ensure its populated, if not populated, auto generate. Will need a function for each
 
 #TODO required fields as array, loop through each and make sure its populated, if not generate 
 
@@ -149,28 +187,13 @@ Write-Host $user
 #groups
 #TODO get groups with membership above a certain threshold and suggest users get added to these if not already in provided groups list. Have threshold easy to adjust
 
-
-#determine what data we already have vs what we need to create
-#TODO create function to generate password with certain parameters
-#TODO if UPN empty then get most commonly used domain in tenant, suggest a UPN with format of j.smith@domain, if not empty then verify the domain is valid before proceeding, if not valid change to the 
-#TODO .onmicrosoft domain and advise user why this happened.
-
-
-#Verification of data - may get combined with above.
-
-#TODO only create user if validation steps are successful. ($create validated users, remove invalid users before proceeding.)
-
-
-#final user advise of what will be created, prompt for confirmation after review
 #TODO create a flag somewhere that can enable zero touch run once error handling and validation are 100%
 
-
-
-#TODO final output must log final details, get by checking the actual object where possible, where not use the submitted data (e.g. for password)
+#TODO final output must log final details, get by checking the actual object where possible, where not use the submitted data (e.g. for password) - want this to be a csv file created from a custom PSObject
 <# 
 Things to output:
-Firstname
-Lastname
+GivenName
+Surname
 middlename
 mailnickname
 upn
@@ -179,8 +202,6 @@ Department
 password - $PasswordProfile.Password / $user.password.passwordprofile.password ? Maybe - speculating until tested.
 
 When outputting to logs, add everything to an arraylist first, then output the lot rather than writing to disk each time, this will quicker.
-
-
 #>
 
 
