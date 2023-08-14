@@ -166,7 +166,7 @@ $newUsers = foreach ($user in $newUsers) {
 }
 $invalidUsers = $invalidUsers | Select-Object -Unique
 $newUsers = $newUsers | Where-Object {$invalidUsers.UserPrincipalName -notcontains $_.UserPrincipalName} | Select-Object -Unique
-
+#Creates the user
 foreach ($user in $newUsers) {
     CreateNewAzureUser -user $user
 }
@@ -177,18 +177,7 @@ foreach ($user in $newUsers) {
 
 #! NEXT - Creating output object CSV
 
-
-#TODO #foreach required field ensure its populated, if not populated, auto generate. Will need a function for each
-
 #TODO required fields as array, loop through each and make sure its populated, if not generate 
-
-#add UPN if empty but verify it is unique, if not unique, try use middle initial if not empty, if it is then use more letters of first name until unique or manually enter.
-
-#groups
-#TODO get groups with membership above a certain threshold and suggest users get added to these if not already in provided groups list. Have threshold easy to adjust
-
-#TODO create a flag somewhere that can enable zero touch run once error handling and validation are 100%
-
 #TODO final output must log final details, get by checking the actual object where possible, where not use the submitted data (e.g. for password) - want this to be a csv file created from a custom PSObject
 <# 
 Things to output:
@@ -204,10 +193,4 @@ password - $PasswordProfile.Password / $user.password.passwordprofile.password ?
 When outputting to logs, add everything to an arraylist first, then output the lot rather than writing to disk each time, this will quicker.
 #>
 
-
-
-<#TODO Things to Test:
-Generate MailNickname works and properly checks if unique.
-Fields are properly submitting themselves to functions when empty.
-#>
 
