@@ -163,6 +163,7 @@ $newUsers = foreach ($user in $newUsers) {
         $errorLog += "User with UserPrincipalName $($user.UserPrincipalName) already exists."
         $invalidUsers += $user
     }
+    $user.UserPrincipalName = $user.UserPrincipalName -replace ' ','' 
 }
 $invalidUsers = $invalidUsers | Select-Object -Unique
 $newUsers = $newUsers | Where-Object {$invalidUsers.UserPrincipalName -notcontains $_.UserPrincipalName} | Select-Object -Unique
